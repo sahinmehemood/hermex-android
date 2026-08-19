@@ -2,45 +2,46 @@
 
 ## Current status
 
-Phase: foundation + architecture hardening.
+Phase: active native rearchitecture.
 
-### Completed in this branch
+### Completed
 
-- Confirmed GitHub write access through the connected GitHub integration.
-- Created development branch `optimus-android` from `main`.
-- Added `PROJECT_SPEC.md` as the product source of truth.
-- Added `docs/ARCHITECTURE.md`.
-- Added `docs/DESIGN_SYSTEM.md`.
-- Added Android validation workflow: `.github/workflows/android.yml`.
-- Added release workflow: `.github/workflows/release.yml`.
-- Added Gradle version override and CI signing support in `app/build.gradle.kts`.
-- Existing initial Hermes Android implementation remains the functional baseline under the branch.
+- GitHub connector write access verified.
+- Development branch `optimus-android` created.
+- Draft PR #1 established as the long-lived integration point.
+- Product specification and durable project memory added.
+- Hermes Desktop parity research and mobile architecture notes added.
+- CI workflow added for unit tests, lint, and debug APK builds.
+- Release workflow added for APK/AAB GitHub Releases with repository-secret signing support.
+- Gradle versioning/signing support added.
+- Premium Optimus semantic color palette and typography added.
+- Adaptive phone/tablet navigation shell rebuilt.
+- Reusable status/tool/approval/run-control UI primitives added.
+- Formal agent run state machine added with reducer tests.
+- Stable domain-facing `AgentGateway` contract added.
+- `AgentRunViewModel` added for run orchestration and cancellation.
 
-## Product north star
+## Architecture target
 
-Native Android implementation inspired by the official Hermes desktop experience and excellent native iOS clients, with Android-first interaction patterns and a premium visual system.
+Native Kotlin + Jetpack Compose. Remote-first Hermes backend. UI, domain, transport, cache, security, and Android platform concerns remain separated.
 
-## Next engineering slices
+## Immediate next slices
 
-1. Rename/rebrand from Hermex to Optimus while keeping backend compatibility.
-2. Introduce layered `core/data/domain/feature` package boundaries.
-3. Replace ad-hoc API calls with typed repositories and explicit Result/error policy.
-4. Implement a formal streaming run state machine.
-5. Rebuild the primary adaptive navigation shell.
-6. Rebuild chat transcript, tool events, approvals, and composer.
-7. Harden secure credential/session storage.
-8. Add Room-backed session/message cache and offline state.
-9. Add workspace and Git interaction safety model.
-10. Add skills/memory/tasks/models/profiles/insights hardening.
-11. Add critical path Compose/UI/integration tests.
-12. Run Android CI and fix every build/lint/test failure.
-13. Configure a production release keystore in GitHub Secrets.
-14. Publish the first real Optimus APK/AAB release.
+1. Wire the existing Hermes REST/WebSocket implementation into `AgentGateway`.
+2. Rebuild the actual chat transcript/composer around `AgentRunState`.
+3. Add encrypted credential/session persistence.
+4. Add offline session/message cache and reconnect policy.
+5. Add attachment pipeline for Android files/images/audio.
+6. Rebuild workspace/file preview and Git safety flows.
+7. Harden skills, memory, tasks, models, profiles, and insights screens against the new design system.
+8. Add notifications, shortcuts, share targets, and deep links.
+9. Expand UI/integration test coverage.
+10. Run CI, resolve all build/lint/test issues, then publish the first usable APK release.
 
-## Important constraint
+## Release rule
 
-Do not inflate the project with meaningless code merely to reach a line-count target. Increase code volume only when it represents real capability, tests, abstractions, documentation, or platform integration.
+Do not call a release production-ready until CI produces an APK/AAB from the exact branch/tag being released and the GitHub Release contains the artifacts.
 
-## Operational memory
+## Research basis
 
-When work resumes, read this file plus `PROJECT_SPEC.md`, `docs/ARCHITECTURE.md`, and `docs/DESIGN_SYSTEM.md` before making structural changes. Keep this file updated after each major phase.
+The official Hermes Desktop app is documented as a native Electron + React product using a headless `hermes serve` backend and JSON-RPC/WebSocket transport. Optimus intentionally does not embed that renderer in a WebView; it adopts the desktop product model and capabilities in a native Android implementation.
