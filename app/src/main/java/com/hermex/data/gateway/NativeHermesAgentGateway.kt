@@ -8,11 +8,12 @@ import com.hermex.domain.chat.AttachmentRef
 import com.hermex.domain.chat.ClarificationRequest
 import com.hermex.domain.chat.ToolRun
 import com.hermex.domain.chat.ToolStatus
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 
 /**
  * Maps the upstream Hermes gateway event stream into the transport-independent
@@ -48,9 +49,8 @@ class NativeHermesAgentGateway(
             }
         ).filterValues { it != null }
 
-        val events = transport.events
         val collector = kotlinx.coroutines.launch {
-            events.collect { event ->
+            transport.events.collect { event ->
                 if (event.sessionId != null && event.sessionId != sessionId) return@collect
                 val mapped = mapEvent(event) ?: return@collect
                 send(mapped)
@@ -62,12 +62,11 @@ class NativeHermesAgentGateway(
 
         try {
             transport.request("prompt.submit", params, timeoutMs = 1_800_000L, responseType = JsonElement::class.java)
+            awaitClose { collector.cancel() }
         } catch (error: Throwable) {
             collector.cancel()
             throw error
         }
-
-        awaitClose { collector.cancel() }
     }
 
     override suspend fun stopRun(sessionId: String) {
@@ -82,39 +81,47 @@ class NativeHermesAgentGateway(
     override suspend fun steerRun(sessionId: String, instruction: String): Flow<AgentRunEvent> =
         submitPrompt(sessionId, instruction, emptyList(), null, null)
 
-    override suspend fun respondToApproval(sessionId: String, requestId: String, approved: Boolean): Flow<AgentRunEvent> = channelFlow {
-        ensureConnected()
-        val choice = if (approved) "once" else "deny"
-        transport.request<JsonElement>(
-            "approval.respond",
-            mapOf("choice" to choice, "request_id" to requestId, "session_id" to sessionId),
-            responseType = JsonElement::class.java
+    override suspend fun respondToApproval(sessionId: String, requestId: String, approved: Boolean): Flow<AgentRunEvent> =
+        respondToInput(
+            sessionId = sessionId,
+            method = "approval.respond",
+            params = mapOf(
+                "choice" to if (approved) "once" else "deny",
+                "request_id" to requestId,
+                "session_id" to sessionId
+            )
         )
-        val collector = kotlinx.coroutines.launch {
-            transport.events.collect { event ->
-                if (event.sessionId == null || event.sessionId == sessionId) {
-                    mapEvent(event)?.let { send(it) }
-                }
-            }
-        }
-        awaitClose { collector.cancel() }
-    }
 
-    override suspend fun respondToClarification(sessionId: String, requestId: String, answer: String): Flow<AgentRunEvent> = channelFlow {
-        ensureConnected()
-        transport.request<JsonElement>(
-            "clarify.respond",
-            mapOf("request_id" to requestId, "answer" to answer, "session_id" to sessionId),
-            responseType = JsonElement::class.java
+    override suspend fun respondToClarification(sessionId: String, requestId: String, answer: String): Flow<AgentRunEvent> =
+        respondToInput(
+            sessionId = sessionId,
+            method = "clarify.respond",
+            params = mapOf(
+                "request_id" to requestId,
+                "answer" to answer,
+                "session_id" to sessionId
+            )
         )
+
+    private suspend fun respondToInput(
+        sessionId: String,
+        method: String,
+        params: Map<String, Any?>
+    ): Flow<AgentRunEvent> = channelFlow {
+        ensureConnected()
         val collector = kotlinx.coroutines.launch {
             transport.events.collect { event ->
-                if (event.sessionId == null || event.sessionId == sessionId) {
-                    mapEvent(event)?.let { send(it) }
-                }
+                if (event.sessionId != null && event.sessionId != sessionId) return@collect
+                mapEvent(event)?.let { send(it) }
             }
         }
-        awaitClose { collector.cancel() }
+        try {
+            transport.request<JsonElement>(method, params, responseType = JsonElement::class.java)
+            awaitClose { collector.cancel() }
+        } catch (error: Throwable) {
+            collector.cancel()
+            throw error
+        }
     }
 
     private suspend fun ensureConnected() = withContext(Dispatchers.IO) {
@@ -129,17 +136,25 @@ class NativeHermesAgentGateway(
         return runCatching {
             val parsed = java.net.URI(url)
             val existing = parsed.rawQuery.orEmpty()
-            val separator = if (existing.isEmpty()) "?" else "&"
+            if (existing.contains("token=") || existing.contains("ticket=")) return@runCatching url
             val encoded = java.net.URLEncoder.encode(token, Charsets.UTF_8.name())
-            if (existing.contains("token=") || existing.contains("ticket=")) url
-            else java.net.URI(parsed.scheme, parsed.userInfo, parsed.host, parsed.port, parsed.path, "$existing${separator}token=$encoded", parsed.fragment).toString()
+            val separator = if (existing.isEmpty()) "" else "&"
+            java.net.URI(
+                parsed.scheme,
+                parsed.userInfo,
+                parsed.host,
+                parsed.port,
+                parsed.path,
+                "$existing${separator}token=$encoded",
+                parsed.fragment
+            ).toString()
         }.getOrDefault(url)
     }
 
     private fun mapEvent(event: GatewayEvent): AgentRunEvent? {
         val p = event.payload
         return when (event.type) {
-            "gateway.ready" -> AgentRunEvent.Started(event.sessionId ?: "gateway")
+            "gateway.ready" -> null
             "message.start" -> AgentRunEvent.Started(event.sessionId ?: "unknown")
             "message.delta" -> AgentRunEvent.TextDelta(readString(p, "delta") ?: readString(p, "text") ?: readString(p, "content") ?: "")
             "message.interim" -> AgentRunEvent.TextDelta(readString(p, "text") ?: readString(p, "content") ?: "")
@@ -160,6 +175,10 @@ class NativeHermesAgentGateway(
             "tool.complete" -> AgentRunEvent.ToolCompleted(
                 toolId = readString(p, "tool_id") ?: readString(p, "id") ?: "",
                 output = readString(p, "output") ?: readString(p, "result") ?: ""
+            )
+            "tool.failed" -> AgentRunEvent.ToolFailed(
+                toolId = readString(p, "tool_id") ?: readString(p, "id") ?: "",
+                output = readString(p, "output") ?: readString(p, "error") ?: ""
             )
             "approval.request" -> AgentRunEvent.ApprovalRequired(
                 ApprovalRequest(
