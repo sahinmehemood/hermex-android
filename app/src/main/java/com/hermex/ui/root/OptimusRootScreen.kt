@@ -1,14 +1,21 @@
 package com.hermex.ui.root
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hermex.ui.main.MainScreen
 
 @Composable
 fun OptimusRootScreen(
     connectionViewModel: ConnectionViewModel = hiltViewModel()
 ) {
-    val state = connectionViewModel.state.value
+    val state by connectionViewModel.state.collectAsStateWithLifecycle()
 
     when {
         state.loading -> ConnectionLoadingScreen()
@@ -17,17 +24,17 @@ fun OptimusRootScreen(
             onConnect = connectionViewModel::save
         )
         else -> MainScreen(
-            onNavigateToSettings = { connectionViewModel.clear() }
+            onNavigateToSettings = connectionViewModel::clear
         )
     }
 }
 
 @Composable
 private fun ConnectionLoadingScreen() {
-    androidx.compose.foundation.layout.Box(
-        modifier = androidx.compose.ui.Modifier.fillMaxSize(),
-        contentAlignment = androidx.compose.ui.Alignment.Center
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.CircularProgressIndicator()
+        CircularProgressIndicator()
     }
 }
