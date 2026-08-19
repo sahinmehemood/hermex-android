@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Hermex</string>
+    <string name="app_name">Optimus</string>
     <string name="connect_title">Connect to Hermes</string>
     <string name="server_url_hint">https://hermes.yourdomain.com</string>
     <string name="password_hint">Password (if required)</string>
