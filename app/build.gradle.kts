@@ -6,6 +6,12 @@ plugins {
     id("kotlin-kapt")
 }
 
+val optimusVersionName = providers.gradleProperty("optimusVersionName").orElse("0.1.0").get()
+val keystorePath = System.getenv("OPTIMUS_KEYSTORE_PATH")
+val keystorePassword = System.getenv("OPTIMUS_KEYSTORE_PASSWORD")
+val keyAlias = System.getenv("OPTIMUS_KEY_ALIAS")
+val keyPassword = System.getenv("OPTIMUS_KEY_PASSWORD")
+
 android {
     namespace = "com.hermex"
     compileSdk = 35
@@ -15,24 +21,43 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = optimusVersionName
+    }
+
+    signingConfigs {
+        if (keystorePath != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (keystorePath != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                // Personal-test fallback. Production distribution should use the
+                // encrypted GitHub Actions release keystore secrets.
+                signingConfig = signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
