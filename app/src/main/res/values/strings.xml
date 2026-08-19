@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">Optimus</string>
     <string name="connect_title">Connect to Hermes</string>
-    <string name="server_url_hint">https://hermes.yourdomain.com</string>
-    <string name="password_hint">Password (if required)</string>
+    <string name="server_url_hint">wss://your-hermes-host/api/ws</string>
+    <string name="password_hint">Gateway token (optional)</string>
     <string name="connect_button">Connect</string>
     <string name="sessions_title">Sessions</string>
     <string name="new_chat">New Chat</string>
