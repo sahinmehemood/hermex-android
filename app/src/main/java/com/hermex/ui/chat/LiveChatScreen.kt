@@ -7,8 +7,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -17,13 +16,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun LiveChatScreen(
     viewModel: LiveChatViewModel = hiltViewModel()
 ) {
-    val ui by viewModel.uiState.collectAsStateWithLifecycleCompat()
-    val run by viewModel.run.collectAsStateWithLifecycleCompat()
+    val ui = viewModel.uiState.collectAsStateWithLifecycleCompat().value
+    val run = viewModel.run.collectAsStateWithLifecycleCompat().value
 
     if (ui.loadingSession) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
 
@@ -41,8 +38,9 @@ fun LiveChatScreen(
         profile = ui.profile,
         onSend = viewModel::send,
         onStop = viewModel::stop,
-        onApprove = { id, approved -> viewModel.approve(id, approved) },
-        onAttach = { /* Attachment provider arrives in next slice. */ }
+        onApprove = viewModel::approve,
+        onClarify = viewModel::clarify,
+        onAttach = { }
     )
 }
 
