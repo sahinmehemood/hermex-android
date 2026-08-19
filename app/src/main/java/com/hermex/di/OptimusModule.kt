@@ -3,6 +3,7 @@ package com.hermex.di
 import android.content.Context
 import com.hermex.data.gateway.ConnectionStore
 import com.hermex.data.gateway.HermesGatewayTransport
+import com.hermex.data.gateway.HermesSessionGateway
 import com.hermex.data.gateway.NativeHermesAgentGateway
 import com.hermex.domain.chat.AgentGateway
 import com.hermex.security.SecureStore
@@ -37,4 +38,11 @@ object OptimusModule {
         connectionStore: ConnectionStore,
         transport: HermesGatewayTransport
     ): AgentGateway = NativeHermesAgentGateway(connectionStore, transport)
+
+    @Provides
+    @Singleton
+    fun provideSessionGateway(
+        connectionStore: ConnectionStore,
+        transport: HermesGatewayTransport
+    ): HermesSessionGateway = HermesSessionGateway(connectionStore, transport)
 }
