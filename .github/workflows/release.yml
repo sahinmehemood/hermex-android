@@ -8,6 +8,8 @@ on:
         required: true
         default: 0.2.0
   push:
+    branches:
+      - 'release/*'
     tags:
       - 'v*.*.*'
 
@@ -26,10 +28,14 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ github.event.inputs.version_name }}" ]; then
-            echo "name=${{ github.event.inputs.version_name }}" >> "$GITHUB_OUTPUT"
+            NAME="${{ github.event.inputs.version_name }}"
+          elif [[ "$GITHUB_REF_NAME" == release/* ]]; then
+            NAME="${GITHUB_REF_NAME#release/}"
           else
-            echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            NAME="${GITHUB_REF_NAME#v}"
           fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NAME" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -61,21 +67,26 @@ jobs:
             echo "OPTIMUS_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
             echo "OPTIMUS_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
           else
-            echo "No release keystore configured; CI will use the Android debug keystore for a personal-test APK."
+            echo "No release keystore configured; using debug signing for a personal-test artifact."
           fi
 
       - name: Build release APK and AAB
         env:
           OPTIMUS_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
-          gradle assembleRelease bundleRelease \
-            -PoptimusVersionName="$OPTIMUS_VERSION_NAME"
+          gradle assembleRelease bundleRelease -PoptimusVersionName="$OPTIMUS_VERSION_NAME"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.name }}
+          tag_name: ${{ steps.version.outputs.tag }}
           generate_release_notes: true
+          prerelease: ${{ startsWith(github.ref_name, 'release/') && contains(github.ref_name, '-') }}
           files: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
+
+      - name: Write release summary
+        run: |
+          echo "## Optimus Android ${{ steps.version.outputs.name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "APK/AAB published to GitHub Releases." >> "$GITHUB_STEP_SUMMARY"
