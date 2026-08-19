@@ -7,6 +7,9 @@ import com.hermex.domain.chat.AgentRunEvent
 import com.hermex.domain.chat.AgentRunState
 import com.hermex.domain.chat.AttachmentRef
 import com.hermex.domain.chat.reduce
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-class AgentRunViewModel(
+@HiltViewModel
+class AgentRunViewModel @Inject constructor(
     private val gateway: AgentGateway
 ) : ViewModel() {
     private val _state = MutableStateFlow<AgentRunState>(AgentRunState.Idle)
@@ -34,7 +38,7 @@ class AgentRunViewModel(
         activeJob = viewModelScope.launch {
             try {
                 gateway.submitPrompt(sessionId, prompt, attachments, model, profile).collect(::applyEvent)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
                 _state.value = AgentRunState.Failed(null, t.message ?: "Unable to start Hermes run", recoverable = true)
@@ -78,6 +82,11 @@ class AgentRunViewModel(
                     _state.value = AgentRunState.Failed(null, error.message ?: "Clarification failed", true)
                 }
         }
+    }
+
+    fun reset() {
+        activeJob?.cancel()
+        _state.value = AgentRunState.Idle
     }
 
     private fun applyEvent(event: AgentRunEvent) {
