@@ -1,8 +1,5 @@
 package com.hermex.ui.chat
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.hermex.domain.chat.AgentRunState
-import com.hermex.domain.chat.ToolRun
 import com.hermex.domain.chat.ToolStatus
 import com.hermex.ui.components.OptimusApprovalCard
 import com.hermex.ui.components.OptimusComposerHint
@@ -62,10 +58,12 @@ fun ChatWorkspace(
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     onApprove: (String, Boolean) -> Unit,
+    onClarify: (String, String) -> Unit,
     onAttach: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var composer by remember { mutableStateOf("") }
+    var clarification by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val running = state is AgentRunState.Running || state is AgentRunState.Submitting || state is AgentRunState.AwaitingApproval || state is AgentRunState.AwaitingClarification
 
@@ -84,14 +82,12 @@ fun ChatWorkspace(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(messages, key = { it.id }) { line ->
-                ConversationBubble(line)
-            }
+            items(messages, key = { it.id }) { line -> ConversationBubble(line) }
 
             when (state) {
                 is AgentRunState.Running -> {
-                    item {
-                        if (state.thinkingText.isNotBlank()) {
+                    if (state.thinkingText.isNotBlank()) {
+                        item {
                             OptimusGlassCard(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(14.dp)) {
                                     OptimusStatusPill("Reasoning", OptimusStatusPillTone.Info)
@@ -125,10 +121,38 @@ fun ChatWorkspace(
                 }
                 is AgentRunState.AwaitingClarification -> item {
                     OptimusGlassCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(14.dp)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             OptimusStatusPill("Needs input", OptimusStatusPillTone.Warning)
-                            Spacer(Modifier.height(8.dp))
                             Text(state.question.question, color = OptimusTextPrimary, style = MaterialTheme.typography.bodyLarge)
+                            if (state.question.options.isNotEmpty()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    state.question.options.take(4).forEach { option ->
+                                        TextButton(onClick = { onClarify(state.question.id, option) }) { Text(option) }
+                                    }
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                OutlinedTextField(
+                                    value = clarification,
+                                    onValueChange = { clarification = it },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { Text("Answer Hermes…") },
+                                    minLines = 2,
+                                    maxLines = 4
+                                )
+                                IconButton(
+                                    onClick = {
+                                        val answer = clarification.trim()
+                                        if (answer.isNotEmpty()) {
+                                            onClarify(state.question.id, answer)
+                                            clarification = ""
+                                        }
+                                    },
+                                    enabled = clarification.isNotBlank()
+                                ) {
+                                    Icon(Icons.Outlined.Send, contentDescription = "Answer")
+                                }
+                            }
                         }
                     }
                 }
@@ -162,19 +186,11 @@ typealias OptimusStatusPillTone = com.hermex.ui.components.OptimusTone
 private fun ConversationBubble(line: ConversationLine) {
     val assistant = line.role == Role.Assistant
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (assistant) Arrangement.Start else Arrangement.End) {
-        SurfaceBubble(assistant = assistant) {
-            Text(line.text, color = OptimusTextPrimary, style = MaterialTheme.typography.bodyLarge)
+        OptimusGlassCard(modifier = Modifier.fillMaxWidth(if (assistant) 0.92f else 0.86f), onClick = null) {
+            Box(Modifier.padding(14.dp)) {
+                Text(line.text, color = OptimusTextPrimary, style = MaterialTheme.typography.bodyLarge)
+            }
         }
-    }
-}
-
-@Composable
-private fun SurfaceBubble(assistant: Boolean, content: @Composable () -> Unit) {
-    OptimusGlassCard(
-        modifier = Modifier.fillMaxWidth(if (assistant) 0.92f else 0.86f),
-        onClick = null
-    ) {
-        Box(Modifier.padding(14.dp)) { content() }
     }
 }
 
@@ -198,7 +214,6 @@ private fun Composer(
                 maxLines = 6,
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
             )
-            Spacer(Modifier.padding(2.dp))
             IconButton(onClick = if (running) onStop else onSend) {
                 Icon(if (running) Icons.Outlined.Stop else Icons.Outlined.Send, contentDescription = if (running) "Stop" else "Send", tint = if (running) Color(0xFFFF7B86) else OptimusPrimary)
             }
@@ -210,10 +225,5 @@ private fun Composer(
     }
 }
 
-data class ConversationLine(
-    val id: String,
-    val role: Role,
-    val text: String
-)
-
+data class ConversationLine(val id: String, val role: Role, val text: String)
 enum class Role { User, Assistant }
